@@ -9,12 +9,12 @@ rm -rf "$data_dir"/*.car
 
 # Generate test vectors
 for size in 1K 10K 100K; do
-  head -c $size </dev/urandom > rand_$size.bin
-  truncate -s $size tests/data/zero_$size.bin
+  head -c $size </dev/urandom > $data_dir/rand_$size.bin
+  truncate -s $size $data_dir/zero_$size.bin
 done
 
 for count in 1000 2000 5000; do
-  seq -s ' ' 1 $count > seq_$count.txt
+  seq -s ' ' 1 $count > $data_dir/seq_$count.txt
 done
 
 # Create .car files for each source file

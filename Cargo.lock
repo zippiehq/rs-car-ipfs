@@ -1073,6 +1073,7 @@ dependencies = [
  "async-std",
  "cid 0.10.1",
  "futures",
+ "hex",
  "hex-literal",
  "ipfs-unixfs",
  "quick-protobuf 0.8.1",

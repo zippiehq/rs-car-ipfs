@@ -1,16 +1,20 @@
 use cid::Cid;
 use futures::{AsyncRead, AsyncWrite, AsyncWriteExt, StreamExt};
-use rs_car::CarReader;
+use rs_car::{CarDecodeError, CarReader};
 
 use crate::pb::FlatUnixFs;
 
 #[derive(Debug)]
 pub enum ReadSingleFileError {
+    IoError(std::io::Error),
+    CarDecodeError(CarDecodeError),
     NotSingleRoot { roots: Vec<Cid> },
     UnexpectedHeaderRoots { expected: Cid, actual: Cid },
     UnknownCid(Cid),
     DuplicateCid(Cid),
     UnexpectedCid { expected: Cid, actual: Cid },
+    InvalidUnixFs(String),
+    InvalidUnixFsHash(String),
 }
 
 pub async fn read_single_file<R: AsyncRead + Send + Unpin, W: AsyncWrite + Unpin>(
@@ -18,10 +22,14 @@ pub async fn read_single_file<R: AsyncRead + Send + Unpin, W: AsyncWrite + Unpin
     out: &mut W,
     root_cid: Option<&Cid>,
 ) -> Result<(), ReadSingleFileError> {
-    let mut streamer = CarReader::new(car_input, true).await.unwrap();
+    let mut streamer = CarReader::new(car_input, true).await?;
 
     let header_root = if streamer.header.roots.len() == 1 {
-        streamer.header.roots.get(0).unwrap()
+        streamer
+            .header
+            .roots
+            .get(0)
+            .expect("roots has len 1 but no item at index 0")
     } else {
         return Err(ReadSingleFileError::NotSingleRoot {
             roots: streamer.header.roots,
@@ -51,9 +59,10 @@ pub async fn read_single_file<R: AsyncRead + Send + Unpin, W: AsyncWrite + Unpin
     // Can the same data block be referenced multiple times? Say in a file with lots of duplicate content
 
     while let Some(item) = streamer.next().await {
-        let (cid, block) = item.unwrap();
+        let (cid, block) = item?;
 
-        let inner = FlatUnixFs::try_from(block.as_slice()).unwrap();
+        let inner = FlatUnixFs::try_from(block.as_slice())
+            .map_err(|err| ReadSingleFileError::InvalidUnixFs(err.to_string()))?;
 
         if inner.links.len() == 0 {
             // Leaf data node, expected to be sorted
@@ -71,15 +80,12 @@ pub async fn read_single_file<R: AsyncRead + Send + Unpin, W: AsyncWrite + Unpin
 
             links_sorted_ptr += 1;
             // file_data.extend_from_slice(inner.data.Data.unwrap().as_ref());
-            out.write_all(inner.data.Data.unwrap().as_ref())
-                .await
-                .unwrap();
+            out.write_all(inner.data.Data.unwrap().as_ref()).await?
         } else {
-            let links_cid = inner
-                .links
-                .iter()
-                .map(|link| hash_to_cid(link.Hash.as_ref().unwrap()))
-                .collect::<Vec<Cid>>();
+            let mut links_cid = Vec::with_capacity(inner.links.len());
+            for link in inner.links.iter() {
+                links_cid.push(hash_to_cid(link.Hash.as_ref().expect("no Hash property"))?);
+            }
 
             // Replace for existing link
             let index = links_sorted
@@ -98,6 +104,21 @@ pub async fn read_single_file<R: AsyncRead + Send + Unpin, W: AsyncWrite + Unpin
     Ok(())
 }
 
-fn hash_to_cid(hash: &[u8]) -> Cid {
-    Cid::try_from(hash).unwrap()
+fn hash_to_cid(hash: &[u8]) -> Result<Cid, ReadSingleFileError> {
+    Cid::try_from(hash).map_err(|err| ReadSingleFileError::InvalidUnixFsHash(err.to_string()))
+}
+
+impl From<CarDecodeError> for ReadSingleFileError {
+    fn from(error: CarDecodeError) -> Self {
+        match error {
+            CarDecodeError::IoError(err) => ReadSingleFileError::IoError(err),
+            err => ReadSingleFileError::CarDecodeError(err),
+        }
+    }
+}
+
+impl From<std::io::Error> for ReadSingleFileError {
+    fn from(error: std::io::Error) -> Self {
+        ReadSingleFileError::IoError(error)
+    }
 }

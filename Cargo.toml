@@ -30,4 +30,5 @@ quick-protobuf = "0.8.1"
 
 [dev-dependencies]
 async-std = { version = "1.12.0", features = ["attributes"] }
+hex = "0.4.3"
 hex-literal = "0.3.4"

@@ -1,11 +1,15 @@
+use async_std::io::ReadExt;
 use futures::io::Cursor;
 use rs_ipfs_car::single_file::read_single_file;
+use std::env;
 use std::{error::Error, ffi::OsStr, fs, path::PathBuf};
 
 const TEST_DATA_DIR: &str = "tests/data";
 
 #[async_std::test]
 async fn read_single_file_test_data() {
+    let run_only = env::var("RUN_ONLY");
+
     let all_filepaths = fs::read_dir(TEST_DATA_DIR)
         .unwrap()
         .filter_map(|entry| {
@@ -20,16 +24,24 @@ async fn read_single_file_test_data() {
 
     let non_car_filepaths = all_filepaths
         .iter()
-        .filter(|path| path.extension().map(|path| path.to_str().unwrap()) != Some("car"))
+        .filter(|path| !is_car_filepath(path))
         .collect::<Vec<&PathBuf>>();
 
     for non_car_filepath in non_car_filepaths.iter() {
+        let expected_data_hex = read_file_to_end_hex(non_car_filepath).await;
+
         let input_filepaths = all_filepaths
             .iter()
-            .filter(|path| path.starts_with(non_car_filepath))
+            .filter(|path| is_car_filepath(path) && path_starts_with(path, non_car_filepath))
             .collect::<Vec<&PathBuf>>();
 
         for input_filepath in input_filepaths {
+            if let Ok(run_only) = &run_only {
+                if !input_filepath.to_str().unwrap().contains(run_only) {
+                    continue;
+                }
+            }
+
             let mut car_input = async_std::fs::File::open(input_filepath).await.unwrap();
             let mut out = Cursor::new(Vec::new());
 
@@ -40,12 +52,32 @@ async fn read_single_file_test_data() {
                     err,
                 ),
                 Ok(_) => {
+                    assert_eq!(
+                        hex::encode(out.get_ref()),
+                        expected_data_hex,
+                        "Different out data {}",
+                        input_filepath.display()
+                    );
                     println!("OK {}", input_filepath.display())
                 }
             }
         }
     }
+}
 
-    println!("{:?}", all_filepaths);
-    println!("{:?}", non_car_filepaths);
+async fn read_file_to_end_hex(path: &PathBuf) -> String {
+    let mut data = vec![];
+    let mut file = async_std::fs::File::open(path).await.unwrap();
+    file.read_to_end(&mut data).await.unwrap();
+    hex::encode(data)
+}
+
+fn path_starts_with(path: &PathBuf, starts_with_path: &PathBuf) -> bool {
+    path.to_str()
+        .unwrap()
+        .starts_with(starts_with_path.to_str().unwrap())
+}
+
+fn is_car_filepath(filepath: &PathBuf) -> bool {
+    filepath.extension().map(|ext| ext.to_str().unwrap()) == Some("car")
 }
