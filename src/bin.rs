@@ -1,19 +1,12 @@
 use async_std::io::{stdin, stdout};
-use rs_car::CarReader;
-use rs_ipfs_car::single_file::read_single_file;
+use rs_car_ipfs::single_file::read_single_file_buffered;
 
 #[async_std::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let stdin = stdin();
+async fn main() {
+    let mut stdin = stdin();
+    let mut stdout = stdout();
 
-    read_single_file(stdin).await.unwrap();
-    let mut car_reader = CarReader::new(&mut r, true).await?;
-    println!("{:?}", car_reader.header);
-
-    while let Some(item) = car_reader.next().await {
-        let (cid, block) = item?;
-        println!("{:?} {} bytes", cid, block.len());
-    }
-
-    Ok(())
+    read_single_file_buffered(&mut stdin, &mut stdout, None, None)
+        .await
+        .unwrap();
 }

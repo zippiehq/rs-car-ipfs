@@ -1,6 +1,6 @@
 use async_std::io::ReadExt;
 use futures::io::Cursor;
-use rs_ipfs_car::single_file::read_single_file_buffered;
+use rs_car_ipfs::single_file::read_single_file_buffered;
 use std::env;
 use std::{fs, path::PathBuf};
 
