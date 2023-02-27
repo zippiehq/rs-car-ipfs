@@ -1,8 +1,8 @@
 use async_std::io::ReadExt;
 use futures::io::Cursor;
-use rs_ipfs_car::single_file::read_single_file;
+use rs_ipfs_car::single_file::read_single_file_buffered;
 use std::env;
-use std::{error::Error, ffi::OsStr, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 const TEST_DATA_DIR: &str = "tests/data";
 
@@ -45,7 +45,7 @@ async fn read_single_file_test_data() {
             let mut car_input = async_std::fs::File::open(input_filepath).await.unwrap();
             let mut out = Cursor::new(Vec::new());
 
-            match read_single_file(&mut car_input, &mut out, None).await {
+            match read_single_file_buffered(&mut car_input, &mut out, None, None).await {
                 Err(err) => panic!(
                     "read_single_file error on {}: {:?}",
                     input_filepath.display(),

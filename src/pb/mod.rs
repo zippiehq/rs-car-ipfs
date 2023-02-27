@@ -1,3 +1,8 @@
+// All files in src/pb/* from https://github.com/rs-ipfs/rust-ipfs/blob/master/unixfs/src/pb.rs
+// Library is archived and required components are not public
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 use core::convert::TryFrom;
 use core::fmt;
 use core::ops::Range;
