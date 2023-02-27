@@ -36,4 +36,5 @@ jobs:
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: car-ipfs
+          features: bin
           token: ${{ secrets.GITHUB_TOKEN }}
