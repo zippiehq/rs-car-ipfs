@@ -2,8 +2,13 @@
 name = "rs-car-ipfs"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "rs-car wrapper to read files from IPFS trustless gateways"
+keywords = ["ipfs", "ipld", "car"]
+repository = "https://github.com/dapplion/rs-car-ipfs"
+documentation = "https://docs.rs/rs-car-ipfs"
+authors = ["dapplion <dapplion@chainsafe.io>"]
+readme = "README.md"
+license = "MIT OR Apache-2.0"
 
 [lib]
 name = "rs_car_ipfs"
