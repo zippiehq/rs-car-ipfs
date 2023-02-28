@@ -1,7 +1,7 @@
 #!/bin/bash
 
 data_dir="tests/data"
-chunkers=("size-262144" "size-512" "size-32")
+chunkers=("size-262144" "size-512" "size-32" "size-1")
 modes=("normal" "trickle")
 
 # Remove existing .car files in data directory
