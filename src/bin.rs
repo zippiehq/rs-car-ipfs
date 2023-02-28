@@ -6,7 +6,8 @@ async fn main() {
     let mut stdin = stdin();
     let mut stdout = stdout();
 
-    read_single_file_buffer(&mut stdin, &mut stdout, None, None)
-        .await
-        .unwrap();
+    if let Err(err) = read_single_file_buffer(&mut stdin, &mut stdout, None, None).await {
+        eprintln!("Error: {}", err);
+        std::process::exit(1);
+    }
 }
