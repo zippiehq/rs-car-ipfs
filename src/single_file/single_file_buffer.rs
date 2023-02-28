@@ -1,6 +1,5 @@
-use cid::Cid;
 use futures::{AsyncRead, AsyncWrite, AsyncWriteExt, StreamExt};
-use rs_car::CarReader;
+use rs_car::{CarReader, Cid};
 use std::collections::HashMap;
 
 use crate::pb::{FlatUnixFs, UnixFsType};

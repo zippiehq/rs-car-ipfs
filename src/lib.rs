@@ -8,4 +8,4 @@
 mod pb;
 pub mod single_file;
 
-pub use cid::Cid;
+pub use rs_car::Cid;

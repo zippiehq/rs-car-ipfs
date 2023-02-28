@@ -1,5 +1,4 @@
-use cid::Cid;
-use rs_car::CarHeader;
+use rs_car::{CarHeader, Cid};
 
 use crate::pb::PBLink;
 

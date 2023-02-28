@@ -35,11 +35,10 @@
 //! 7 [-][-][-][-][-][-][-][-][-][-][-][-]
 //! ```
 
-use cid::Cid;
 use futures::{
     AsyncRead, AsyncReadExt, AsyncSeek, AsyncSeekExt, AsyncWrite, AsyncWriteExt, StreamExt,
 };
-use rs_car::CarReader;
+use rs_car::{CarReader, Cid};
 use std::{collections::HashMap, io::SeekFrom};
 
 use crate::pb::{FlatUnixFs, UnixFsType};
