@@ -1,25 +1,34 @@
 use cid::Cid;
 use futures::{AsyncRead, AsyncWrite, AsyncWriteExt, StreamExt};
-use rs_car::{CarDecodeError, CarReader};
+use rs_car::CarReader;
 use std::collections::HashMap;
 
 use crate::pb::{FlatUnixFs, UnixFsType};
 
-#[derive(Debug)]
-pub enum ReadSingleFileError {
-    IoError(std::io::Error),
-    CarDecodeError(CarDecodeError),
-    NotSingleRoot { roots: Vec<Cid> },
-    UnexpectedHeaderRoots { expected: Cid, actual: Cid },
-    InvalidUnixFs(String),
-    InvalidUnixFsHash(String),
-    MissingNode(Cid),
-    MaxBufferedData(usize),
-    RootCidIsNotFile,
-}
+use super::{
+    util::{assert_header_single_file, links_to_cids},
+    ReadSingleFileError,
+};
 
-/// Read CAR stream from `car_input`
-pub async fn read_single_file_buffered<R: AsyncRead + Send + Unpin, W: AsyncWrite + Unpin>(
+/// Read CAR stream from `car_input` as a single file buffering the block dag in memory
+///
+/// # Examples
+///
+/// ```
+/// use rs_car_ipfs::{Cid, single_file::read_single_file_buffer};
+/// use futures::io::Cursor;
+///
+/// #[async_std::main]
+/// async fn main() {
+///   let mut input = async_std::fs::File::open("tests/example.car").await.unwrap();
+///   let mut out = Cursor::new(Vec::new());
+///   let root_cid = Cid::try_from("QmUU2HcUBVSXkfWPUc3WUSeCMrWWeEJTuAgR9uyWBhh9Nf").unwrap();
+///   let max_buffer = 10_000_000; // 10MB
+///
+///   read_single_file_buffer(&mut input, &mut out, Some(&root_cid), Some(max_buffer)).await.unwrap();
+/// }
+/// ```
+pub async fn read_single_file_buffer<R: AsyncRead + Send + Unpin, W: AsyncWrite + Unpin>(
     car_input: &mut R,
     out: &mut W,
     root_cid: Option<&Cid>,
@@ -28,19 +37,7 @@ pub async fn read_single_file_buffered<R: AsyncRead + Send + Unpin, W: AsyncWrit
     let mut streamer = CarReader::new(car_input, true).await?;
 
     // Optional verification of the root_cid
-    let root_cid = match root_cid {
-        Some(root_cid) => *root_cid,
-        None => {
-            // If not root CID is provided, assume header contains the single root_cid for this file
-            if streamer.header.roots.len() == 1 {
-                streamer.header.roots[0]
-            } else {
-                return Err(ReadSingleFileError::NotSingleRoot {
-                    roots: streamer.header.roots,
-                });
-            }
-        }
-    };
+    let root_cid = assert_header_single_file(&streamer.header, root_cid)?;
 
     // In-memory buffer of data nodes
     let mut nodes = HashMap::new();
@@ -78,12 +75,7 @@ pub async fn read_single_file_buffered<R: AsyncRead + Send + Unpin, W: AsyncWrit
             nodes.insert(cid, UnixFsNode::Data(data));
         } else {
             // Intermediary node (links)
-            let mut links_cid = Vec::with_capacity(inner.links.len());
-            for link in inner.links.iter() {
-                links_cid.push(hash_to_cid(link.Hash.as_ref().expect("no Hash property"))?);
-            }
-
-            nodes.insert(cid, UnixFsNode::Links(links_cid));
+            nodes.insert(cid, UnixFsNode::Links(links_to_cids(inner.links)?));
         };
     }
 
@@ -119,39 +111,4 @@ fn flatten_tree<'a>(
 enum UnixFsNode {
     Links(Vec<Cid>),
     Data(Vec<u8>),
-}
-
-fn hash_to_cid(hash: &[u8]) -> Result<Cid, ReadSingleFileError> {
-    Cid::try_from(hash).map_err(|err| ReadSingleFileError::InvalidUnixFsHash(err.to_string()))
-}
-
-impl From<CarDecodeError> for ReadSingleFileError {
-    fn from(error: CarDecodeError) -> Self {
-        match error {
-            CarDecodeError::IoError(err) => ReadSingleFileError::IoError(err),
-            err => ReadSingleFileError::CarDecodeError(err),
-        }
-    }
-}
-
-impl From<std::io::Error> for ReadSingleFileError {
-    fn from(error: std::io::Error) -> Self {
-        ReadSingleFileError::IoError(error)
-    }
-}
-
-impl std::fmt::Display for ReadSingleFileError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl std::error::Error for ReadSingleFileError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            ReadSingleFileError::IoError(err) => Some(err),
-            ReadSingleFileError::CarDecodeError(err) => Some(err),
-            _ => None,
-        }
-    }
 }

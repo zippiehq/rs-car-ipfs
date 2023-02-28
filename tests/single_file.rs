@@ -1,6 +1,6 @@
 use async_std::io::ReadExt;
 use futures::io::Cursor;
-use rs_car_ipfs::single_file::read_single_file_buffered;
+use rs_car_ipfs::single_file::{read_single_file_buffer, read_single_file_seek};
 use std::env;
 use std::{fs, path::PathBuf};
 
@@ -42,23 +42,54 @@ async fn read_single_file_test_data() {
                 }
             }
 
-            let mut car_input = async_std::fs::File::open(input_filepath).await.unwrap();
-            let mut out = Cursor::new(Vec::new());
+            {
+                let mut car_input = async_std::fs::File::open(input_filepath).await.unwrap();
+                let mut out = Cursor::new(Vec::new());
 
-            match read_single_file_buffered(&mut car_input, &mut out, None, None).await {
-                Err(err) => panic!(
-                    "read_single_file error on {}: {:?}",
-                    input_filepath.display(),
-                    err,
-                ),
-                Ok(_) => {
-                    assert_eq!(
-                        hex::encode(out.get_ref()),
-                        expected_data_hex,
-                        "Different out data {}",
-                        input_filepath.display()
-                    );
-                    println!("OK {}", input_filepath.display())
+                match read_single_file_buffer(&mut car_input, &mut out, None, None).await {
+                    Err(err) => panic!(
+                        "read_single_file_buffer error on {}: {:?}",
+                        input_filepath.display(),
+                        err,
+                    ),
+                    Ok(_) => {
+                        assert_eq!(
+                            hex::encode(out.get_ref()),
+                            expected_data_hex,
+                            "Different out data {}",
+                            input_filepath.display()
+                        );
+                        println!("OK {} read_single_file_buffer", input_filepath.display())
+                    }
+                }
+            }
+
+            {
+                let mut car_input = async_std::fs::File::open(input_filepath).await.unwrap();
+                let mut out = Cursor::new(Vec::new());
+
+                match read_single_file_seek(&mut car_input, &mut out, None).await {
+                    Err(err) => panic!(
+                        "read_single_file_seek error on {}: {:?}",
+                        input_filepath.display(),
+                        err,
+                    ),
+                    Ok(_) => {
+                        let out_hex = hex::encode(out.get_ref());
+                        assert_eq!(
+                            out_hex.len(),
+                            expected_data_hex.len(),
+                            "Different out data len {}",
+                            input_filepath.display()
+                        );
+                        assert_eq!(
+                            hex::encode(out.get_ref()),
+                            expected_data_hex,
+                            "Different out data {}",
+                            input_filepath.display()
+                        );
+                        println!("OK {} read_single_file_seek", input_filepath.display())
+                    }
                 }
             }
         }
