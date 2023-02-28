@@ -19,13 +19,14 @@ use super::{
 /// use futures::io::Cursor;
 ///
 /// #[async_std::main]
-/// async fn main() {
-///   let mut input = async_std::fs::File::open("tests/example.car").await.unwrap();
-///   let mut out = Cursor::new(Vec::new());
-///   let root_cid = Cid::try_from("QmUU2HcUBVSXkfWPUc3WUSeCMrWWeEJTuAgR9uyWBhh9Nf").unwrap();
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///   let mut input = async_std::fs::File::open("tests/example.car").await?;
+///   let mut out = async_std::fs::File::create("tests/data/helloworld.txt").await?;
+///   let root_cid = Cid::try_from("QmUU2HcUBVSXkfWPUc3WUSeCMrWWeEJTuAgR9uyWBhh9Nf")?;
 ///   let max_buffer = 10_000_000; // 10MB
 ///
-///   read_single_file_buffer(&mut input, &mut out, Some(&root_cid), Some(max_buffer)).await.unwrap();
+///   read_single_file_buffer(&mut input, &mut out, Some(&root_cid), Some(max_buffer)).await?;
+///   Ok(())
 /// }
 /// ```
 pub async fn read_single_file_buffer<R: AsyncRead + Send + Unpin, W: AsyncWrite + Unpin>(
@@ -52,11 +53,8 @@ pub async fn read_single_file_buffer<R: AsyncRead + Send + Unpin, W: AsyncWrite 
             .map_err(|err| ReadSingleFileError::InvalidUnixFs(err.to_string()))?;
 
         // Check that the root CID is a file for sanity
-        if cid == root_cid {
-            match inner.data.Type {
-                UnixFsType::File => {} // Ok,
-                _ => return Err(ReadSingleFileError::RootCidIsNotFile),
-            }
+        if cid == root_cid && inner.data.Type != UnixFsType::File {
+            return Err(ReadSingleFileError::RootCidIsNotFile);
         }
 
         if inner.links.len() == 0 {

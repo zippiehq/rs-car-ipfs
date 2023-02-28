@@ -59,12 +59,13 @@ use super::{
 /// use futures::io::Cursor;
 ///
 /// #[async_std::main]
-/// async fn main() {
-///   let mut input = async_std::fs::File::open("tests/example.car").await.unwrap();
-///   let mut out = Cursor::new(Vec::new());
-///   let root_cid = Cid::try_from("QmUU2HcUBVSXkfWPUc3WUSeCMrWWeEJTuAgR9uyWBhh9Nf").unwrap();
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///   let mut input = async_std::fs::File::open("tests/example.car").await?;
+///   let mut out = async_std::fs::File::create("tests/data/helloworld.txt").await?;
+///   let root_cid = Cid::try_from("QmUU2HcUBVSXkfWPUc3WUSeCMrWWeEJTuAgR9uyWBhh9Nf")?;
 ///
-///   read_single_file_seek(&mut input, &mut out, Some(&root_cid)).await.unwrap();
+///   read_single_file_seek(&mut input, &mut out, Some(&root_cid)).await?;
+///   Ok(())
 /// }
 /// ```
 pub async fn read_single_file_seek<
@@ -80,12 +81,10 @@ pub async fn read_single_file_seek<
     // Optional verification of the root_cid
     let root_cid = assert_header_single_file(&streamer.header, root_cid)?;
 
-    // In-memory buffer of data nodes
+    // In-memory buffer of nodes, except the data contents of data nodes
     let mut nodes = HashMap::new();
     let mut sorted_links = SortedLinks::new(root_cid);
-    let mut file_ptr = 0;
-
-    // Can the same data block be referenced multiple times? Say in a file with lots of duplicate content
+    let mut out_ptr = 0;
 
     while let Some(item) = streamer.next().await {
         let (cid, block) = item?;
@@ -105,6 +104,8 @@ pub async fn read_single_file_seek<
             // - If the CID of the node is known but is not the first, error
             match sorted_links.find(cid) {
                 FindResult::IsNext => {} // Ok
+                // This check is unnecessary for correctness but would allow to detect
+                // a corrupt CAR stream. Otherwise this function would error with PendingLinksAtEOF
                 FindResult::NotNext => return Err(ReadSingleFileError::DataNodesNotSorted),
                 FindResult::Unknown => continue,
             }
@@ -116,11 +117,11 @@ pub async fn read_single_file_seek<
 
             // Wrote `cid` advance write ptr and sorted links pointer
             let size = data.len();
-            let start = file_ptr;
-            file_ptr += size;
+            let start = out_ptr;
+            out_ptr += size;
             sorted_links.advance()?;
 
-            UnixFsNode::Data { start, size }
+            UnixFsNode::DataPtr { start, size }
         } else {
             // Intermediary node (links)
             UnixFsNode::Links(links_to_cids(inner.links)?)
@@ -129,15 +130,16 @@ pub async fn read_single_file_seek<
         nodes.insert(cid, node);
 
         // Attempt to progress on potential pending nodes
+        // See module docs for a more detailed explanation
         while let Some(first) = sorted_links.first() {
             match nodes.get(first) {
                 // Next node in the file layout is an existing node of already written data.
                 // Use AsyncSeek to read from disk and write into new location
-                Some(UnixFsNode::Data { start, size }) => {
-                    copy_from_to_itself(out, *start, file_ptr, *size).await?;
+                Some(UnixFsNode::DataPtr { start, size }) => {
+                    copy_from_to_itself(out, *start, out_ptr, *size).await?;
 
                     // Wrote `cid` advance write ptr and sorted links pointer
-                    file_ptr += size;
+                    out_ptr += size;
                     sorted_links.advance()?;
                 }
                 // Next node in the file layout is an existing links node, apply insert_replace
@@ -156,6 +158,8 @@ pub async fn read_single_file_seek<
     }
 }
 
+/// Tracks the unixfs links progressively building the linear layout of the target file
+/// New links are inserted in place recursively expanding the tree to its leafs.
 struct SortedLinks<T: PartialEq + Clone> {
     pub sorted_items: Vec<T>,
     items_ptr: usize,
@@ -225,7 +229,7 @@ enum FindResult {
 
 enum UnixFsNode {
     Links(Vec<Cid>),
-    Data { start: usize, size: usize },
+    DataPtr { start: usize, size: usize },
 }
 
 async fn copy_from_to_itself<W: AsyncSeek + AsyncRead + AsyncWrite + Unpin>(
