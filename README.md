@@ -19,7 +19,10 @@ cargo install rs-car-ipfs
 curl "http://localhost:8080/ipfs/QmV3q6mo8oxf2GBuvR7zx7ABFBNP5VrRs3sCr63HQ7kEFC?format=car" | car-ipfs
 ```
 
+On an `Intel(R) Core(TM) i5-8250U CPU @ 1.60GHz` bin `car-ipfs` achieves 75,0MiB/s of throughput.
+
 # Roadmap
 
 - [x] Read CAR for single file buffering all blocks in memory
+- [x] Read CAR for single file without buffering blocks in memory
 - [ ] Read CAR for multiple files and directories and write to disk
