@@ -56,10 +56,11 @@ pub async fn read_single_file_buffer<R: AsyncRead + Send + Unpin, W: AsyncWrite 
             return Err(ReadSingleFileError::RootCidIsNotFile);
         }
 
-        if inner.links.len() == 0 {
+        if inner.links.is_empty() {
             // Leaf data node
-            // TODO: Is it possible to prevent having to copy here?
-            let data = inner.data.Data.unwrap().to_vec();
+            let data = inner.data.Data.ok_or(ReadSingleFileError::InvalidUnixFs(
+                "unixfs data node has not Data field".to_string(),
+            ))?;
 
             // Allow to limit max buffered data to prevent OOM
             if let Some(max_buffer) = max_buffer {
@@ -69,10 +70,11 @@ pub async fn read_single_file_buffer<R: AsyncRead + Send + Unpin, W: AsyncWrite 
                 }
             }
 
-            nodes.insert(cid, UnixFsNode::Data(data));
+            // TODO: Is it possible to prevent having to clone here?
+            nodes.insert(cid, UnixFsNode::Data(data.to_vec()));
         } else {
             // Intermediary node (links)
-            nodes.insert(cid, UnixFsNode::Links(links_to_cids(inner.links)?));
+            nodes.insert(cid, UnixFsNode::Links(links_to_cids(&inner.links)?));
         };
     }
 
@@ -89,7 +91,7 @@ fn flatten_tree<'a>(
 ) -> Result<Vec<&'a Vec<u8>>, ReadSingleFileError> {
     let node = nodes
         .get(root_cid)
-        .ok_or(ReadSingleFileError::MissingNode(root_cid.clone()))?;
+        .ok_or(ReadSingleFileError::MissingNode(*root_cid))?;
 
     Ok(match node {
         UnixFsNode::Data(data) => vec![data],

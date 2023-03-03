@@ -1,4 +1,4 @@
-# rs-ipfs-car
+# rs-car-ipfs
 
 Wrapper for [rs-car](https://crates.io/crates/rs-car) to read files from IPFS trustless gateways with an async API
 
@@ -10,7 +10,7 @@ Wrapper for [rs-car](https://crates.io/crates/rs-car) to read files from IPFS tr
 # bin usage
 
 ```
-cargo install rs-car-ipfs
+cargo install rs-car-ipfs --features bin
 ```
 
 `car-ipfs` reads a CAR stream from stdin and outputs the file contents to stdout

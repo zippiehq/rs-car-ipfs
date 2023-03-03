@@ -23,16 +23,16 @@ pub fn assert_header_single_file(
     })
 }
 
-pub fn links_to_cids<'a>(links: Vec<PBLink<'a>>) -> Result<Vec<Cid>, ReadSingleFileError> {
-    let mut links_cid = Vec::with_capacity(links.len());
-    for link in links.iter() {
-        links_cid.push(hash_to_cid(
+pub fn links_to_cids(links: &[PBLink<'_>]) -> Result<Vec<Cid>, ReadSingleFileError> {
+    links
+        .iter()
+        .map(|link| {
             link.Hash
                 .as_ref()
-                .ok_or(ReadSingleFileError::PBLinkHasNoHash)?,
-        )?);
-    }
-    Ok(links_cid)
+                .ok_or(ReadSingleFileError::PBLinkHasNoHash)
+                .and_then(|c| hash_to_cid(c))
+        })
+        .collect()
 }
 
 fn hash_to_cid(hash: &[u8]) -> Result<Cid, ReadSingleFileError> {

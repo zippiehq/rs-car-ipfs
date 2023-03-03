@@ -5,7 +5,6 @@ pub enum ReadSingleFileError {
     IoError(std::io::Error),
     CarDecodeError(CarDecodeError),
     NotSingleRoot { roots: Vec<Cid> },
-    UnexpectedHeaderRoots { expected: Cid, actual: Cid },
     InvalidUnixFs(String),
     InvalidUnixFsHash(String),
     MissingNode(Cid),
@@ -14,7 +13,6 @@ pub enum ReadSingleFileError {
     DataNodesNotSorted,
     PendingLinksAtEOF(Vec<Cid>),
     PBLinkHasNoHash,
-    // TEMP
     InternalError(String),
 }
 
