@@ -49,14 +49,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        name:
-          - linux / stable
-          - linux / beta
-          - macOS / stable
-          - windows / stable-x86_64-msvc
-          - windows / stable-i686-msvc
-          - windows / stable-x86_64-gnu
-          - windows / stable-i686-gnu
+        include:
+          - name: linux / stable
+          - name: linux / beta
+            rust: beta
+          - name: macOS / stable
+            os: macOS-latest
+          - name: windows / stable-x86_64-gnu
+            os: windows-latest
+            rust: stable-x86_64-pc-windows-gnu
+            target: x86_64-pc-windows-gnu
 
     steps:
       - name: Checkout
@@ -68,8 +70,8 @@ jobs:
           toolchain: ${{ matrix.rust || 'stable' }}
           targets: ${{ matrix.target }}
 
-      - name: Build
-        run: cargo build
+      - name: Check
+        run: cargo check
 
       - name: Test
         run: cargo test -- --test-threads=1 --nocapture
