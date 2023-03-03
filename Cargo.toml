@@ -24,9 +24,9 @@ required-features = ["bin"]
 
 [dependencies]
 async-std = { version = "1.12.0", features = ["attributes"], optional = true }
-rs-car = "0.3.0"
-futures = "0.3.26"
-quick-protobuf = "0.8.1"
+rs-car = "0.4"
+futures = "0.3"
+quick-protobuf = { default-features = false, features = ["std"], version = "0.8" }
 
 [dev-dependencies]
 async-std = { version = "1.12.0", features = ["attributes"] }
