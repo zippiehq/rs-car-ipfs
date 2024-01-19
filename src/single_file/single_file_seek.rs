@@ -77,7 +77,12 @@ pub async fn read_single_file_seek<
             ))?;
 
             // Write data now, and keep a record for potential future writes
-            out.write_all(&data).await?;
+            if data.len() >= 32 && data.iter().all(|&x| x == 0) {
+                out.seek(SeekFrom::Current((data.len() - 1) as i64)).await?;
+                out.write(&[0]).await?;
+            } else {
+                out.write_all(&data).await?;
+            }
 
             // Wrote `cid` advance write ptr and sorted links pointer
             let size = data.len();
@@ -206,10 +211,15 @@ async fn copy_from_to_itself<W: AsyncSeek + AsyncRead + AsyncWrite + Unpin>(
 
     let mut buffer = vec![0; size];
     r.read_exact(&mut buffer).await?;
-
+    
     r.seek(SeekFrom::Start(dest_offset as u64)).await?;
 
-    r.write_all(&buffer).await?;
+    if buffer.len() >= 32 && buffer.iter().all(|&x| x == 0) {
+        r.seek(SeekFrom::Current((buffer.len() - 1) as i64)).await?;
+        r.write(&[0]).await?;
+    } else {
+        r.write_all(&buffer).await?;
+    }
 
     Ok(())
 }
