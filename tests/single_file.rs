@@ -68,7 +68,7 @@ async fn read_single_file_test_data() {
                 let mut car_input = async_std::fs::File::open(input_filepath).await.unwrap();
                 let mut out = Cursor::new(Vec::new());
 
-                match read_single_file_seek(&mut car_input, &mut out, None).await {
+                match read_single_file_seek(&mut car_input, &mut out, None, None).await {
                     Err(err) => panic!(
                         "read_single_file_seek error on {}: {:?}",
                         input_filepath.display(),
