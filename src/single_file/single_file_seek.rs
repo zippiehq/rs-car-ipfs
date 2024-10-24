@@ -26,7 +26,7 @@ use super::{
 ///   let mut out = async_std::fs::File::create("tests/data/helloworld.txt").await?;
 ///   let root_cid = Cid::try_from("QmUU2HcUBVSXkfWPUc3WUSeCMrWWeEJTuAgR9uyWBhh9Nf")?;
 ///
-///   read_single_file_seek(&mut input, &mut out, Some(&root_cid)).await?;
+///   read_single_file_seek(&mut input, &mut out, Some(&root_cid), None).await?;
 ///   Ok(())
 /// }
 /// ```
@@ -37,7 +37,9 @@ pub async fn read_single_file_seek<
     car_input: &mut R,
     out: &mut W,
     root_cid: Option<&Cid>,
+    write_limit: Option<usize>,
 ) -> Result<(), ReadSingleFileError> {
+    let write_limit = write_limit.unwrap_or(usize::MAX);
     let mut streamer = CarReader::new(car_input, true).await?;
 
     // Optional verification of the root_cid
@@ -47,6 +49,7 @@ pub async fn read_single_file_seek<
     let mut nodes = HashMap::new();
     let mut sorted_links = SortedLinks::new(root_cid);
     let mut out_ptr = 0;
+    let mut total_bytes_written = 0usize;
 
     while let Some(item) = streamer.next().await {
         let (cid, block) = item?;
@@ -76,13 +79,28 @@ pub async fn read_single_file_seek<
                 "unixfs data node has not Data field".to_string(),
             ))?;
 
+            // check if the write limit will be exceeded before writing
+            if total_bytes_written + data.len() > write_limit {
+                return Err(ReadSingleFileError::WriteLimitExceeded(
+                    total_bytes_written + data.len(),
+                ));
+            }
+
             // Write data now, and keep a record for potential future writes
             if data.len() >= 32 && data.iter().all(|&x| x == 0) {
-                out.seek(SeekFrom::Current((data.len() - 1) as i64)).await?;
-                out.write(&[0]).await?;
+                out.seek(SeekFrom::Current((data.len() - 1) as i64))
+                    .await
+                    .map_err(ReadSingleFileError::IoError)?;
+                out.write(&[0])
+                    .await
+                    .map_err(ReadSingleFileError::IoError)?;
             } else {
-                out.write_all(&data).await?;
+                out.write_all(&data)
+                    .await
+                    .map_err(ReadSingleFileError::IoError)?;
             }
+
+            total_bytes_written += data.len();
 
             // Wrote `cid` advance write ptr and sorted links pointer
             let size = data.len();
@@ -105,7 +123,21 @@ pub async fn read_single_file_seek<
                 // Next node in the file layout is an existing node of already written data.
                 // Use AsyncSeek to read from disk and write into new location
                 Some(UnixFsNode::DataPtr { start, size }) => {
-                    copy_from_to_itself(out, *start, out_ptr, *size).await?;
+                    // check if the write limit will be exceeded before copying
+                    if total_bytes_written + size > write_limit {
+                        return Err(ReadSingleFileError::WriteLimitExceeded(
+                            total_bytes_written + size,
+                        ));
+                    }
+                    copy_from_to_itself(
+                        out,
+                        *start,
+                        out_ptr,
+                        *size,
+                        &mut total_bytes_written,
+                        write_limit
+                    )
+                    .await?;
 
                     // Wrote `cid` advance write ptr and sorted links pointer
                     out_ptr += size;
@@ -206,20 +238,44 @@ async fn copy_from_to_itself<W: AsyncSeek + AsyncRead + AsyncWrite + Unpin>(
     src_offset: usize,
     dest_offset: usize,
     size: usize,
-) -> Result<(), std::io::Error> {
-    r.seek(SeekFrom::Start(src_offset as u64)).await?;
+    total_bytes_written: &mut usize,
+    write_limit: usize,
+) -> Result<(), ReadSingleFileError> {
+    // check if the write limit will be exceeded before writing
+    if *total_bytes_written + size > write_limit {
+        return Err(ReadSingleFileError::WriteLimitExceeded(
+            *total_bytes_written + size,
+        ));
+    }
+
+    r.seek(SeekFrom::Start(src_offset as u64))
+        .await
+        .map_err(ReadSingleFileError::IoError)?;
 
     let mut buffer = vec![0; size];
-    r.read_exact(&mut buffer).await?;
-    
-    r.seek(SeekFrom::Start(dest_offset as u64)).await?;
+    r.read_exact(&mut buffer)
+        .await
+        .map_err(ReadSingleFileError::IoError)?;
+
+    r.seek(SeekFrom::Start(dest_offset as u64))
+        .await
+        .map_err(ReadSingleFileError::IoError)?;
 
     if buffer.len() >= 32 && buffer.iter().all(|&x| x == 0) {
-        r.seek(SeekFrom::Current((buffer.len() - 1) as i64)).await?;
-        r.write(&[0]).await?;
+        r.seek(SeekFrom::Current((buffer.len() - 1) as i64))
+            .await
+            .map_err(ReadSingleFileError::IoError)?;
+        r.write(&[0])
+            .await
+            .map_err(ReadSingleFileError::IoError)?;
     } else {
-        r.write_all(&buffer).await?;
+        r.write_all(&buffer)
+            .await
+            .map_err(ReadSingleFileError::IoError)?;
     }
+
+    *total_bytes_written += size;
+
 
     Ok(())
 }

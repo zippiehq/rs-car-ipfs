@@ -14,6 +14,7 @@ pub enum ReadSingleFileError {
     PendingLinksAtEOF(Vec<Cid>),
     PBLinkHasNoHash,
     InternalError(String),
+    WriteLimitExceeded(usize),
 }
 
 impl From<CarDecodeError> for ReadSingleFileError {
